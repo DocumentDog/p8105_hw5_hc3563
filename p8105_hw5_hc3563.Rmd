@@ -1,0 +1,115 @@
+---
+title: "Homework 5"
+author: "Hanchuan Chen"
+date: "2024-11-09"
+output: html_document
+---
+
+```{r setup, message=FALSE}
+library(tidyverse)
+```
+
+### Problem 2
+```{r t_test_0}
+# t test for mu=0
+n = 30
+mu = 0
+sigma = 5
+alpha = 0.05
+
+results = data.frame(mu_hat = numeric(5000), p_value = numeric(5000))
+
+set.seed(42)
+for (i in 1:5000) {
+  data = rnorm(n=30, mean = mu, sd = sigma)
+  t_test = t.test(data, mu=0)
+  
+  tidy_test = broom::tidy(t_test)
+  results$mu_hat[i] = tidy_test$estimate
+  results$p_value[i] = tidy_test$p.value
+}
+  
+```
+
+```{r t_test}
+# repeat test for mu = 1 to 6
+n = 30
+sigma = 5
+alpha = 0.05
+
+results <- data.frame(mu = numeric(), mu_hat = numeric(), p_value = numeric())
+
+set.seed(42)
+for (j in 1:6) {
+  mu = j
+  sub_results = data.frame(mu = j, mu_hat = numeric(5000), p_value = numeric(5000))
+  
+  for (i in 1:5000) {
+    data = rnorm(n=30, mean = mu, sd = sigma)
+    t_test = t.test(data, mu=0)
+    
+    tidy_test = broom::tidy(t_test)
+    sub_results$mu_hat[i] = tidy_test$estimate
+    sub_results$p_value[i] = tidy_test$p.value
+  }
+  
+  results = bind_rows(results, sub_results)
+}
+```
+
+```{r plot_diagrams}
+#plot the first plot
+rejected_p_value = 
+  results |> 
+  filter(p_value < 0.05) |> 
+  group_by(mu) |> 
+  summarize(count = n()) |> 
+  mutate(prop = count / 5000)
+
+ggplot(rejected_p_value, aes(x = mu, y = prop)) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(breaks = 1:6) +
+  labs(x = "True Value of μ", y = "Proportion of Rejections", 
+       title = "Power of the Test vs True μ") +
+  theme_minimal()
+```
+
+From the plot above, it is clear to see that As the true μ gets larger (moving from 1 to 6), the effect size increases, making it easier to reject the null hypothesis with higher power.
+
+```{r second_plot}
+# plot the second plot
+avg_all_estimate = 
+  results |> 
+  group_by(mu) |> 
+  summarize(mean_mu_all = mean(mu_hat))
+
+avg_rejected_estimate = 
+  results |> 
+  filter(p_value < 0.05) |> 
+  group_by(mu) |> 
+  summarize(mean_mu_rejected = mean(mu_hat))
+
+avg_estimate = inner_join(avg_all_estimate, avg_rejected_estimate, by = "mu")
+
+ggplot(avg_estimate, aes(x = mu)) +
+  geom_line(aes(y=mean_mu_all, color = "All Samples")) +
+  geom_point(aes(y=mean_mu_all, color = "All Samples")) +
+  geom_line(aes(y=mean_mu_rejected, color = "Rejected Samples")) +
+  geom_point(aes(y=mean_mu_rejected, color = "Rejected Samples")) +
+  scale_x_continuous(breaks = 1:6) +
+  labs(x = "True Value of μ", y = "Average estimate of rejected μ", 
+       title = "Rejected estimate μ vs True μ") +
+  scale_color_manual(values = c("All Samples" = "blue", "Rejected Samples" = "red")) +
+  theme_minimal()
+```
+
+In this plot, blue line represents the average estimate of mean and red line represents the average estimate of mean only in rejected samples. For the tests with true value of μ are 1,2, and 3, the sample average of μ across tests for which the null is rejected is greater than true μ; however, they are approximately equal to true μ when the value is 4,5, and 6. 
+
+This is because we are selecting cases where is likely farther from zero when we only pick rejected samples. This effect causes the average among rejected samples to be larger than the true μ, particularly for smaller true values.
+
+
+
+
+
+
