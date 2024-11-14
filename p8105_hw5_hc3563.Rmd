@@ -162,7 +162,7 @@ city_proportions =
   mutate(results = map2(unsolved, total, calculate_prop)) |> 
   unnest_wider(results)
 
-knitr::kable(city_proportions)
+knitr::kable(city_proportions, digits = 3)
 ```
 
 Below is the plot showing the confidence interval of proportion of homicide in each city:
