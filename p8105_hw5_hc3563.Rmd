@@ -2,7 +2,7 @@
 title: "Homework 5"
 author: "Hanchuan Chen"
 date: "2024-11-09"
-output: html_document
+output: github_document
 ---
 
 ```{r setup, message=FALSE}
@@ -107,6 +107,103 @@ ggplot(avg_estimate, aes(x = mu)) +
 In this plot, blue line represents the average estimate of mean and red line represents the average estimate of mean only in rejected samples. For the tests with true value of μ are 1,2, and 3, the sample average of μ across tests for which the null is rejected is greater than true μ; however, they are approximately equal to true μ when the value is 4,5, and 6. 
 
 This is because we are selecting cases where is likely farther from zero when we only pick rejected samples. This effect causes the average among rejected samples to be larger than the true μ, particularly for smaller true values.
+
+### Problem 3
+```{r message=FALSE}
+homicide_df = 
+  read_csv("./data/homicide-data.csv") |> 
+  janitor::clean_names() |> 
+  mutate(city_state = paste(city, state, sep=", ")) 
+
+homicide_count = 
+  homicide_df |> 
+  group_by(city, disposition) |> 
+  summarize(count = n()) |> 
+  pivot_wider(
+    names_from = disposition,
+    values_from = count
+  ) |> 
+  janitor::clean_names() |> 
+  mutate(total = closed_by_arrest + coalesce(closed_without_arrest,0) + open_no_arrest) |> 
+  mutate(unsolved = coalesce(closed_without_arrest,0) + open_no_arrest) |> 
+  select(city, total, unsolved)
+```
+
+For the raw homicide data, it contains specific date, basic information of victims, and the location of homicide, finally with the disposition of the issue in 50 cities in U.S.. There are `r nrow(homicide_df)` of issues and `r ncol(homicide_df)` of variables.
+
+```{r}
+baltimore_data = 
+  homicide_count |> 
+  filter(city == "Baltimore")
+
+prop_test = prop.test(baltimore_data$unsolved, baltimore_data$total)
+tidy_test = broom::tidy(prop_test)
+cat("estimate proportion:", tidy_test$estimate)
+cat("confidence interval:", tidy_test$conf.low, tidy_test$conf.high)
+```
+
+The estimated proportion of unsolved homicide cases in Baltimore, MD, is approximately 64.6%. The 95% confidence interval for this estimate ranges from about 62.8% to 66.3%.
+
+Below dataframe is the estimate and confidence interval for all cities, including total number of homicides and unsolved number of homicides:
+```{r}
+calculate_prop = function(unsolved, total) {
+  prop_test = prop.test(unsolved, total)
+  tidy_test = broom::tidy(prop_test)
+  
+  list(
+    estimated_proportion = tidy_test$estimate,
+    conf_low = tidy_test$conf.low,
+    conf_high = tidy_test$conf.high
+  )
+}
+
+city_proportions = 
+  homicide_count |> 
+  mutate(results = map2(unsolved, total, calculate_prop)) |> 
+  unnest_wider(results)
+
+knitr::kable(city_proportions)
+```
+
+Below is the plot showing the confidence interval of proportion of homicide in each city:
+```{r}
+city_proportions =
+  city_proportions |> 
+  arrange(desc(estimated_proportion))
+
+city_proportions$city = 
+  factor(city_proportions$city, levels = city_proportions$city)
+
+# Plot the estimates and confidence intervals
+ggplot(city_proportions, aes(x = city, y = estimated_proportion)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf_low, ymax = conf_high), width = 0.2) +
+  coord_flip() + 
+  labs(
+    title = "Proportion of Unsolved Homicides by City with Confidence Intervals",
+    x = "City",
+    y = "Estimated Proportion of Unsolved Homicides"
+  ) +
+  theme_minimal()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
