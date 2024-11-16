@@ -10,55 +10,45 @@ library(tidyverse)
 ```
 
 ### Problem 2
+
+#### Generate 5000 datasets from the model by setting mu = 0
 ```{r t_test_0}
 # t test for mu=0
-n = 30
-mu = 0
-sigma = 5
-alpha = 0.05
-
-results = data.frame(mu_hat = numeric(5000), p_value = numeric(5000))
-
-set.seed(42)
-for (i in 1:5000) {
-  data = rnorm(n=30, mean = mu, sd = sigma)
-  t_test = t.test(data, mu=0)
+simulate_test = function(n=30, mu = 0, sigma=5, alpha=0.05) {
   
-  tidy_test = broom::tidy(t_test)
-  results$mu_hat[i] = tidy_test$estimate
-  results$p_value[i] = tidy_test$p.value
-}
+  results = data.frame(mu = mu, mu_hat = numeric(5000), p_value = numeric(5000))
   
-```
-
-```{r t_test}
-# repeat test for mu = 1 to 6
-n = 30
-sigma = 5
-alpha = 0.05
-
-results <- data.frame(mu = numeric(), mu_hat = numeric(), p_value = numeric())
-
-set.seed(42)
-for (j in 1:6) {
-  mu = j
-  sub_results = data.frame(mu = j, mu_hat = numeric(5000), p_value = numeric(5000))
-  
+  set.seed(42)
   for (i in 1:5000) {
-    data = rnorm(n=30, mean = mu, sd = sigma)
+    data = rnorm(n=n, mean = mu, sd = sigma)
     t_test = t.test(data, mu=0)
     
     tidy_test = broom::tidy(t_test)
-    sub_results$mu_hat[i] = tidy_test$estimate
-    sub_results$p_value[i] = tidy_test$p.value
+    results$mu_hat[i] = tidy_test$estimate
+    results$p_value[i] = tidy_test$p.value
   }
   
+  return(results)
+}
+
+simulate_test(mu = 0) |> 
+  summary() |> 
+  knitr::kable()
+```
+
+#### Repeat process by setting mu range from 1 to 6
+```{r t_test}
+# repeat test for mu = 1 to 6
+results = data.frame()
+for (j in 1:6) {
+  sub_results = simulate_test(mu = j)
   results = bind_rows(results, sub_results)
 }
 ```
 
+#### Draw the plot of the power and the true value mu.
 ```{r plot_diagrams}
-#plot the first plot
+#calculate power
 rejected_p_value = 
   results |> 
   filter(p_value < 0.05) |> 
@@ -70,12 +60,16 @@ ggplot(rejected_p_value, aes(x = mu, y = prop)) +
   geom_line() +
   geom_point() +
   scale_x_continuous(breaks = 1:6) +
-  labs(x = "True Value of μ", y = "Proportion of Rejections", 
+  labs(x = "True Value of μ", 
+       y = "Proportion of Rejections (power of t-test)", 
        title = "Power of the Test vs True μ") +
   theme_minimal()
 ```
 
-From the plot above, it is clear to see that As the true μ gets larger (moving from 1 to 6), the effect size increases, making it easier to reject the null hypothesis with higher power.
+#### Comment for first plot
+From the plot above, it is clear to see that as the true μ gets larger (moving from 1 to 6), the power of t-test also increases and finally reach to 100%, making it easier to reject the null hypothesis with higher power. So true value of mu has positve association with power of t-test
+
+#### Plot of the average estimate of 𝜇̂ and the true value of 𝜇.
 
 ```{r second_plot}
 # plot the second plot
@@ -106,15 +100,36 @@ ggplot(avg_estimate, aes(x = mu)) +
 
 In this plot, blue line represents the average estimate of mean and red line represents the average estimate of mean only in rejected samples. For the tests with true value of μ are 1,2, and 3, the sample average of μ across tests for which the null is rejected is greater than true μ; however, they are approximately equal to true μ when the value is 4,5, and 6. 
 
-This is because we are selecting cases where is likely farther from zero when we only pick rejected samples. This effect causes the average among rejected samples to be larger than the true μ, particularly for smaller true values.
+Sample average of mu across tests for which the null is rejected does not equal to the true value of mu. This is because we are selecting cases where is likely farther from zero when we only pick rejected samples. This effect causes the average among rejected samples to be larger than the true μ, particularly for smaller true values.
 
 ### Problem 3
-```{r message=FALSE}
+
+#### Dataset description
+```{r}
+#load homicide data and tidy it
 homicide_df = 
   read_csv("./data/homicide-data.csv") |> 
   janitor::clean_names() |> 
   mutate(city_state = paste(city, state, sep=", ")) 
+```
 
+For the raw homicide data,there are `r nrow(homicide_df)` rows and `r ncol(homicide_df)` columns. The dataset contains detailed information about homicide cases, including demographic details of the victim and geographic details of the incident.
+
+* uid: Unique identifier for each homicide case.
+* reported_date: The date when the homicide was reported (likely in YYYYMMDD format).
+* victim_last: Last name of the victim.
+* victim_first: First name of the victim.
+* victim_race: Race of the victim (e.g., Hispanic, White).
+* victim_age: Age of the victim at the time of the incident.
+* victim_sex: Sex of the victim (e.g., Male, Female).
+* city: City where the homicide occurred (e.g., Albuquerque).
+* state: State where the homicide occurred (e.g., NM for New Mexico).
+* lat and lon: Latitude and longitude coordinates indicating the location of the incident.
+* disposition: Status or outcome of the case (e.g., "Closed without arrest", "Closed by arrest").
+
+#### Total number of homicides and the number of unsolved homicides in city
+##### Table for this question is combined with confidence interval down below
+```{r message=FALSE}
 homicide_count = 
   homicide_df |> 
   group_by(city, disposition) |> 
@@ -129,8 +144,7 @@ homicide_count =
   select(city, total, unsolved)
 ```
 
-For the raw homicide data, it contains specific date, basic information of victims, and the location of homicide, finally with the disposition of the issue in 50 cities in U.S.. There are `r nrow(homicide_df)` of issues and `r ncol(homicide_df)` of variables.
-
+#### Estimated proportion of homicides that are unsolved in Baltimore;
 ```{r}
 baltimore_data = 
   homicide_count |> 
@@ -144,7 +158,8 @@ cat("confidence interval:", tidy_test$conf.low, tidy_test$conf.high)
 
 The estimated proportion of unsolved homicide cases in Baltimore, MD, is approximately 64.6%. The 95% confidence interval for this estimate ranges from about 62.8% to 66.3%.
 
-Below dataframe is the estimate and confidence interval for all cities, including total number of homicides and unsolved number of homicides:
+
+#### Estimate and confidence interval for all cities
 ```{r}
 calculate_prop = function(unsolved, total) {
   prop_test = prop.test(unsolved, total)
@@ -165,7 +180,7 @@ city_proportions =
 knitr::kable(city_proportions, digits = 3)
 ```
 
-Below is the plot showing the confidence interval of proportion of homicide in each city:
+#### Plot showing the confidence interval of proportion of homicide in each city:
 ```{r}
 city_proportions =
   city_proportions |> 
@@ -184,7 +199,7 @@ ggplot(city_proportions, aes(x = city, y = estimated_proportion)) +
     x = "City",
     y = "Estimated Proportion of Unsolved Homicides"
   ) +
-  theme_minimal()
+  theme_minimal(base_size = 12)
 ```
 
 
